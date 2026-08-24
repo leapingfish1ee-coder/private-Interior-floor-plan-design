@@ -9,7 +9,7 @@
     "preview": "vite preview --host 0.0.0.0"
   },
   "dependencies": {
-    "@dimforge/rapier3d-compat": "0.20.0",
+    "@dimforge/rapier3d": "npm:@dimforge/rapier3d-compat@0.20.0",
     "three": "0.185.1"
   },
   "devDependencies": {
