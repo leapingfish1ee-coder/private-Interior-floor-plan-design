@@ -5,6 +5,18 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
     <meta name="theme-color" content="#0b0d10" />
     <title>Interior Spatial Twin</title>
+    <link rel="stylesheet" href="./src/style.css" />
+    <script type="importmap">
+      {
+        "imports": {
+          "three": "https://esm.sh/three@0.185.1",
+          "three/webgpu": "https://esm.sh/three@0.185.1/webgpu",
+          "three/addons/": "https://esm.sh/three@0.185.1/examples/jsm/",
+          "@dimforge/rapier3d": "https://esm.sh/@dimforge/rapier3d-compat@0.20.0",
+          "./src/style.css": "data:text/javascript,export default {}"
+        }
+      }
+    </script>
   </head>
   <body>
     <div id="app"></div>
@@ -25,7 +37,7 @@
       <div id="roomLabel" class="glass">玄关 / 鞋帽区</div>
 
       <aside class="status glass">
-        <div><span>渲染</span><strong id="rendererMode">WebGPU</strong></div>
+        <div><span>渲染</span><strong id="rendererMode">待初始化</strong></div>
         <div><span>楼层</span><strong id="floorMode">1F</strong></div>
         <div><span>基准</span><strong>11.830 m</strong></div>
         <div><span>模型</span><strong>Concept LOD-1</strong></div>
@@ -42,17 +54,17 @@
         <div class="boot-card glass">
           <div class="eyebrow">REAL-TIME 3D / WEBGPU</div>
           <h1>重新建模版本</h1>
-          <p>以 CAD 截图可确认的 11.830 m 横向总尺寸作为比例锚点，重新建立双层空间、主要房间、湿区、楼梯、门窗开口和基础家具体块；当前几何属于方案验证级，不作为施工放样依据。</p>
+          <p>以 CAD 截图可确认的 11.830 m 横向总尺寸作为比例锚点，重新建立双层空间、主要房间、湿区、楼梯、门窗开口和基础家具体块；首次进入时会初始化渲染器与碰撞系统。</p>
           <div class="boot-grid">
-            <div><b>Three.js WebGPU</b><span>现代渲染后端与 WebGL2 回退</span></div>
+            <div><b>Three.js WebGPU</b><span>WebGPU 优先并自动回退 WebGL2</span></div>
             <div><b>PBR Lighting</b><span>物理材质、环境光、软阴影</span></div>
-            <div><b>Rapier 3D</b><span>真实碰撞体与角色运动</span></div>
+            <div><b>Rapier 3D</b><span>兼容版 WASM 与内置碰撞回退</span></div>
             <div><b>Responsive Input</b><span>桌面与移动端双输入</span></div>
           </div>
           <button id="enter">进入第一人称漫游</button>
         </div>
       </section>
     </div>
-    <script type="module" src="/src/main.js"></script>
+    <script type="module" src="./src/main.js"></script>
   </body>
 </html>
