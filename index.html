@@ -2,18 +2,15 @@
 <html lang="zh-CN">
   <head>
     <meta charset="UTF-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
-    <meta name="theme-color" content="#0b0d10" />
-    <title>Interior Spatial Twin</title>
+    <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover" />
+    <meta name="theme-color" content="#111315" />
+    <title>High Fidelity Showroom</title>
     <link rel="stylesheet" href="./src/style.css" />
     <script type="importmap">
       {
         "imports": {
           "three": "https://esm.sh/three@0.185.1",
-          "three/webgpu": "https://esm.sh/three@0.185.1/webgpu",
-          "three/addons/": "https://esm.sh/three@0.185.1/examples/jsm/",
-          "@dimforge/rapier3d": "https://esm.sh/@dimforge/rapier3d-compat@0.20.0",
-          "./src/style.css": "data:text/javascript,export%20default%20%7B%7D"
+          "three/addons/": "https://esm.sh/three@0.185.1/examples/jsm/"
         }
       }
     </script>
@@ -23,27 +20,25 @@
     <div id="hud">
       <header class="topbar glass">
         <div>
-          <div class="eyebrow">INTERIOR SPATIAL TWIN</div>
-          <div class="title">住宅 CAD 第一人称空间重建</div>
+          <div class="eyebrow">HIGH FIDELITY SHOWROOM</div>
+          <div class="title">单间样板房 · 实时高质量渲染</div>
         </div>
         <div class="topbar-actions">
-          <button class="floor active" data-floor="1">1F</button>
-          <button class="floor" data-floor="2">2F</button>
-          <button id="reset">复位</button>
+          <button id="reset">复位视角</button>
         </div>
       </header>
 
       <div id="crosshair" aria-hidden="true"></div>
-      <div id="roomLabel" class="glass">玄关 / 鞋帽区</div>
+      <div id="positionLabel" class="position-chip glass">0.0 m · 2.0 m</div>
 
       <aside class="status glass">
-        <div><span>渲染</span><strong id="rendererMode">待初始化</strong></div>
-        <div><span>楼层</span><strong id="floorMode">1F</strong></div>
-        <div><span>基准</span><strong>11.830 m</strong></div>
-        <div><span>模型</span><strong>Concept LOD-1</strong></div>
+        <div><span>渲染</span><strong id="rendererMode">初始化中</strong></div>
+        <div><span>画质</span><strong id="qualityMode">初始化中</strong></div>
+        <div><span>空间</span><strong>6.8 × 5.4 × 3.1 m</strong></div>
+        <div><span>材质</span><strong>PBR / IBL / Physical</strong></div>
       </aside>
 
-      <div class="help glass">WASD 移动 · Shift 加速 · 鼠标拖动观察 · 点击画面锁定视角 · 1/2 切层 · R 复位</div>
+      <div class="help glass">WASD 移动 · Shift 加速 · 鼠标拖动/锁定观察 · R 复位</div>
 
       <div id="mobileControls">
         <div id="joystick"><div id="stick"></div></div>
@@ -52,19 +47,32 @@
 
       <section id="boot" class="boot">
         <div class="boot-card glass">
-          <div class="eyebrow">REAL-TIME 3D / WEBGPU</div>
-          <h1>重新建模版本</h1>
-          <p>以 CAD 截图可确认的 11.830 m 横向总尺寸作为比例锚点，重新建立双层空间、主要房间、湿区、楼梯、门窗开口和基础家具体块；首次进入时会初始化渲染器与碰撞系统。</p>
+          <div class="eyebrow">SINGLE ROOM / ULTRA SHADOWS</div>
+          <h1>现代主卧样板间</h1>
+          <p>旧有双层户型与全部 CAD 结构已移除，当前场景仅保留一个独立样板房间，并重新制作窗洞、吊顶、床品、软包背景墙、窗帘、灯具、家具、艺术品与绿植。</p>
           <div class="boot-grid">
-            <div><b>Three.js WebGPU</b><span>WebGPU 优先并自动回退 WebGL2</span></div>
-            <div><b>PBR Lighting</b><span>物理材质、环境光、软阴影</span></div>
-            <div><b>Rapier 3D</b><span>兼容版 WASM 与内置碰撞回退</span></div>
-            <div><b>Responsive Input</b><span>桌面与移动端双输入</span></div>
+            <div><b>4096px 主阴影</b><span>桌面端高分辨率 PCF Soft Shadow</span></div>
+            <div><b>物理材质</b><span>玻璃、织物 sheen、金属、木饰面</span></div>
+            <div><b>环境反射</b><span>PMREM + RoomEnvironment 室内 IBL</span></div>
+            <div><b>真实入窗光</b><span>窗墙开洞后由方向光直接投射阴影</span></div>
           </div>
-          <button id="enter">进入第一人称漫游</button>
+          <button id="enter">进入样板间</button>
         </div>
       </section>
     </div>
+
+    <script>
+      window.addEventListener('error', (event) => {
+        const el = document.querySelector('#rendererMode');
+        if (el) el.textContent = '运行错误';
+        console.error(event.error || event.message);
+      });
+      window.addEventListener('unhandledrejection', (event) => {
+        const el = document.querySelector('#rendererMode');
+        if (el) el.textContent = '模块加载失败';
+        console.error(event.reason);
+      });
+    </script>
     <script type="module" src="./src/main.js"></script>
   </body>
 </html>
