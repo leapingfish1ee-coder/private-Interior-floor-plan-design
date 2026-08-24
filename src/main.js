@@ -1,15 +1,15 @@
 import './style.css';
 import * as THREE from 'three/webgpu';
-import RAPIER from '@dimforge/rapier3d';
 import { RoundedBoxGeometry } from 'three/addons/geometries/RoundedBoxGeometry.js';
 import { floors, WALL_HEIGHT, WALL_THICKNESS } from './plan.js';
 
 const app = document.querySelector('#app');
+const boot = document.querySelector('#boot');
+const enterButton = document.querySelector('#enter');
 const roomLabel = document.querySelector('#roomLabel');
 const floorMode = document.querySelector('#floorMode');
 const rendererMode = document.querySelector('#rendererMode');
-
-await RAPIER.init();
+const resetButton = document.querySelector('#reset');
 
 const scene = new THREE.Scene();
 scene.background = new THREE.Color(0x9aa6b2);
@@ -18,17 +18,8 @@ scene.fog = new THREE.FogExp2(0xb4bdc5, 0.018);
 const camera = new THREE.PerspectiveCamera(70, innerWidth / innerHeight, 0.05, 80);
 camera.rotation.order = 'YXZ';
 
-const useWebGPU = Boolean(navigator.gpu);
-const renderer = new THREE.WebGPURenderer({ antialias: true, forceWebGL: !useWebGPU });
-renderer.setPixelRatio(Math.min(devicePixelRatio, 2));
-renderer.setSize(innerWidth, innerHeight);
-renderer.shadowMap.enabled = true;
-renderer.shadowMap.type = THREE.PCFSoftShadowMap;
-renderer.toneMapping = THREE.ACESFilmicToneMapping;
-renderer.toneMappingExposure = 1.08;
-await renderer.init();
-rendererMode.textContent = useWebGPU ? 'WebGPU' : 'WebGL2 fallback';
-app.appendChild(renderer.domElement);
+const worldRoot = new THREE.Group();
+scene.add(worldRoot);
 
 const hemi = new THREE.HemisphereLight(0xeaf1f7, 0x665a4d, 1.45);
 scene.add(hemi);
@@ -58,15 +49,29 @@ const materials = {
   fabric: new THREE.MeshStandardMaterial({ color: 0xa9aaa3, roughness: 0.96 }),
   wood: new THREE.MeshStandardMaterial({ color: 0x8e684d, roughness: 0.72 }),
   accent: new THREE.MeshStandardMaterial({ color: 0x9c745a, roughness: 0.78 }),
-  glass: new THREE.MeshPhysicalMaterial({ color: 0xbfd9e5, roughness: 0.08, transmission: 0.58, transparent: true, opacity: 0.38, thickness: 0.02, ior: 1.45, side: THREE.DoubleSide }),
-  water: new THREE.MeshPhysicalMaterial({ color: 0x8db7c5, roughness: 0.15, transmission: 0.2, transparent: true, opacity: 0.72 })
+  glass: new THREE.MeshPhysicalMaterial({
+    color: 0xbfd9e5,
+    roughness: 0.08,
+    transmission: 0.58,
+    transparent: true,
+    opacity: 0.38,
+    thickness: 0.02,
+    ior: 1.45,
+    side: THREE.DoubleSide
+  }),
+  water: new THREE.MeshPhysicalMaterial({
+    color: 0x8db7c5,
+    roughness: 0.15,
+    transmission: 0.2,
+    transparent: true,
+    opacity: 0.72
+  })
 };
 
-const worldRoot = new THREE.Group();
-scene.add(worldRoot);
-
 function meshBox(w, h, d, material, x, y, z, radius = 0) {
-  const geometry = radius > 0 ? new RoundedBoxGeometry(w, h, d, 4, radius) : new THREE.BoxGeometry(w, h, d);
+  const geometry = radius > 0
+    ? new RoundedBoxGeometry(w, h, d, 4, radius)
+    : new THREE.BoxGeometry(w, h, d);
   const mesh = new THREE.Mesh(geometry, material);
   mesh.position.set(x, y, z);
   mesh.castShadow = true;
@@ -92,6 +97,7 @@ function addWindow(group, data) {
     : new THREE.BoxGeometry(thickness, data.h, data.w);
   const pane = new THREE.Mesh(geometry, materials.glass);
   pane.position.set(data.x, data.sill + data.h / 2, data.z);
+  pane.castShadow = false;
   group.add(pane);
 }
 
@@ -100,6 +106,7 @@ function addFloor(group, rect) {
   const slab = meshBox(rect.w, 0.08, rect.d, material, rect.x, -0.04, rect.z);
   slab.receiveShadow = true;
   group.add(slab);
+
   const ceiling = meshBox(rect.w, 0.055, rect.d, materials.ceiling, rect.x, WALL_HEIGHT + 0.0275, rect.z);
   ceiling.castShadow = false;
   group.add(ceiling);
@@ -175,8 +182,7 @@ function addFixtures(group, floor) {
 
 function addStairs(group) {
   for (let i = 0; i < 13; i++) {
-    const tread = meshBox(0.20, 0.10, 0.78, materials.wood, 4.78 + i * 0.18, 0.05 + i * 0.105, 0.52, 0.01);
-    group.add(tread);
+    group.add(meshBox(0.20, 0.10, 0.78, materials.wood, 4.78 + i * 0.18, 0.05 + i * 0.105, 0.52, 0.01));
   }
 }
 
@@ -184,11 +190,13 @@ function addRoomLights(group, floor) {
   const points = floor === 1
     ? [[2.0,2.6],[5.7,2.8],[8.5,1.55],[10.55,1.7],[10.25,3.45],[9.15,5.72]]
     : [[1.65,3.35],[1.55,0.75],[5.75,2.5],[8.3,1.2],[10.2,1.3],[9.2,3.85]];
-  for (const [x,z] of points) {
+
+  for (const [x, z] of points) {
     const light = new THREE.PointLight(0xffe4bf, 18, 4.6, 2);
     light.position.set(x, 2.22, z);
     light.castShadow = false;
     group.add(light);
+
     const lamp = new THREE.Mesh(new THREE.CylinderGeometry(0.05, 0.07, 0.05, 20), materials.white);
     lamp.position.set(x, 2.48, z);
     group.add(lamp);
@@ -208,41 +216,108 @@ function buildFloor(floor) {
   worldRoot.add(group);
 }
 
-const ground = new THREE.Mesh(new THREE.PlaneGeometry(50, 50), new THREE.MeshStandardMaterial({ color: 0x758071, roughness: 1 }));
+const ground = new THREE.Mesh(
+  new THREE.PlaneGeometry(50, 50),
+  new THREE.MeshStandardMaterial({ color: 0x758071, roughness: 1 })
+);
 ground.rotation.x = -Math.PI / 2;
 ground.position.y = -0.085;
 ground.receiveShadow = true;
 scene.add(ground);
 
-let physicsWorld;
-let playerBody;
-let playerCollider;
-let characterController;
+let renderer = null;
+let renderLoopInstalled = false;
+let started = false;
+let starting = false;
 let currentFloor = 1;
-let yaw = 0;
+let yaw = floors[1].start.yaw;
 let pitch = 0;
 const eyeHeight = 1.62;
+const playerRadius = 0.23;
 const keys = new Set();
+const player = { x: floors[1].start.x, z: floors[1].start.z };
+
+let RAPIER = null;
+let physicsWorld = null;
+let playerBody = null;
+let playerCollider = null;
+let characterController = null;
+let physicsReady = false;
+
+function setCameraFromPlayer() {
+  const p = physicsReady && playerBody ? playerBody.translation() : player;
+  camera.position.set(p.x, eyeHeight, p.z);
+  camera.rotation.set(pitch, yaw, 0);
+}
+setCameraFromPlayer();
+buildFloor(1);
+
+async function createRenderer() {
+  if (renderer) return renderer;
+
+  rendererMode.textContent = '初始化…';
+  try {
+    const gpuRenderer = new THREE.WebGPURenderer({ antialias: true });
+    gpuRenderer.setPixelRatio(Math.min(devicePixelRatio, 2));
+    gpuRenderer.setSize(innerWidth, innerHeight);
+    gpuRenderer.shadowMap.enabled = true;
+    gpuRenderer.shadowMap.type = THREE.PCFSoftShadowMap;
+    gpuRenderer.toneMapping = THREE.ACESFilmicToneMapping;
+    gpuRenderer.toneMappingExposure = 1.08;
+    await gpuRenderer.init();
+    renderer = gpuRenderer;
+    rendererMode.textContent = navigator.gpu ? 'WebGPU' : 'WebGL2 fallback';
+  } catch (webgpuError) {
+    console.warn('WebGPURenderer initialization failed, using stable WebGLRenderer.', webgpuError);
+    const GL = await import('three');
+    const glRenderer = new GL.WebGLRenderer({ antialias: true, powerPreference: 'high-performance' });
+    glRenderer.setPixelRatio(Math.min(devicePixelRatio, 2));
+    glRenderer.setSize(innerWidth, innerHeight);
+    glRenderer.shadowMap.enabled = true;
+    glRenderer.shadowMap.type = GL.PCFSoftShadowMap;
+    glRenderer.toneMapping = GL.ACESFilmicToneMapping;
+    glRenderer.toneMappingExposure = 1.08;
+    renderer = glRenderer;
+    rendererMode.textContent = 'WebGL2 stable';
+  }
+
+  app.replaceChildren(renderer.domElement);
+  installPointerControls();
+  installRenderLoop();
+  return renderer;
+}
 
 function createStaticBox(x, y, z, hx, hy, hz, rotationY = 0) {
   const bodyDesc = RAPIER.RigidBodyDesc.fixed().setTranslation(x, y, z);
   const body = physicsWorld.createRigidBody(bodyDesc);
-  if (rotationY) body.setRotation({ x: 0, y: Math.sin(rotationY / 2), z: 0, w: Math.cos(rotationY / 2) }, true);
+  if (rotationY) {
+    body.setRotation({ x: 0, y: Math.sin(rotationY / 2), z: 0, w: Math.cos(rotationY / 2) }, true);
+  }
   physicsWorld.createCollider(RAPIER.ColliderDesc.cuboid(hx, hy, hz), body);
 }
 
 function rebuildPhysics(floor) {
+  if (!RAPIER) return;
   physicsWorld = new RAPIER.World({ x: 0, y: -9.81, z: 0 });
-  createStaticBox(5.915, -0.08, 2.45, 5.915, 0.08, 2.45);
-  if (floor === 1) createStaticBox(9.265, -0.08, 5.72, 1.475, 0.08, 0.82);
-  if (floor === 2) createStaticBox(9.14, -0.08, 5.62, 1.72, 0.08, 0.72);
+
+  for (const rect of floors[floor].floorRects) {
+    createStaticBox(rect.x, -0.08, rect.z, rect.w / 2, 0.08, rect.d / 2);
+  }
 
   for (const seg of floors[floor].walls) {
     const dx = seg.x2 - seg.x1;
     const dz = seg.z2 - seg.z1;
     const len = Math.hypot(dx, dz);
     const angle = -Math.atan2(dz, dx);
-    createStaticBox((seg.x1 + seg.x2) / 2, WALL_HEIGHT / 2, (seg.z1 + seg.z2) / 2, len / 2, WALL_HEIGHT / 2, WALL_THICKNESS / 2, angle);
+    createStaticBox(
+      (seg.x1 + seg.x2) / 2,
+      WALL_HEIGHT / 2,
+      (seg.z1 + seg.z2) / 2,
+      len / 2,
+      WALL_HEIGHT / 2,
+      WALL_THICKNESS / 2,
+      angle
+    );
   }
 
   const start = floors[floor].start;
@@ -252,30 +327,50 @@ function rebuildPhysics(floor) {
   characterController = physicsWorld.createCharacterController(0.015);
   characterController.enableAutostep(0.28, 0.18, true);
   characterController.enableSnapToGround(0.15);
-  yaw = start.yaw;
-  pitch = 0;
+  physicsReady = true;
 }
 
-function syncCamera() {
-  const p = playerBody.translation();
-  camera.position.set(p.x, eyeHeight, p.z);
-  camera.rotation.set(pitch, yaw, 0);
+async function initializePhysics() {
+  try {
+    const mod = await import('@dimforge/rapier3d');
+    RAPIER = mod.default;
+    await RAPIER.init();
+    rebuildPhysics(currentFloor);
+  } catch (error) {
+    physicsReady = false;
+    RAPIER = null;
+    console.warn('Rapier unavailable; continuing with built-in collision fallback.', error);
+  }
 }
 
-function setFloor(floor) {
-  currentFloor = floor;
-  buildFloor(floor);
-  rebuildPhysics(floor);
-  floorMode.textContent = `${floor}F`;
-  document.querySelectorAll('.floor').forEach(btn => btn.classList.toggle('active', Number(btn.dataset.floor) === floor));
-  syncCamera();
+function pointSegmentDistance(px, pz, x1, z1, x2, z2) {
+  const vx = x2 - x1;
+  const vz = z2 - z1;
+  const wx = px - x1;
+  const wz = pz - z1;
+  const len2 = vx * vx + vz * vz || 1;
+  const t = Math.max(0, Math.min(1, (wx * vx + wz * vz) / len2));
+  const cx = x1 + t * vx;
+  const cz = z1 + t * vz;
+  return Math.hypot(px - cx, pz - cz);
 }
 
-function resetPlayer() {
-  const start = floors[currentFloor].start;
-  playerBody.setNextKinematicTranslation({ x: start.x, y: 0.85, z: start.z });
-  yaw = start.yaw;
-  pitch = 0;
+function insideFootprint(x, z) {
+  const margin = playerRadius * 0.75;
+  return floors[currentFloor].floorRects.some(rect =>
+    x >= rect.x - rect.w / 2 + margin &&
+    x <= rect.x + rect.w / 2 - margin &&
+    z >= rect.z - rect.d / 2 + margin &&
+    z <= rect.z + rect.d / 2 - margin
+  );
+}
+
+function fallbackCanOccupy(x, z) {
+  if (!insideFootprint(x, z)) return false;
+  const minDistance = playerRadius + WALL_THICKNESS * 0.5;
+  return floors[currentFloor].walls.every(seg =>
+    pointSegmentDistance(x, z, seg.x1, seg.z1, seg.x2, seg.z2) > minDistance
+  );
 }
 
 function roomAt(x, z) {
@@ -285,53 +380,81 @@ function roomAt(x, z) {
   return `${currentFloor}F 连接空间`;
 }
 
-setFloor(1);
+function resetPlayer() {
+  const start = floors[currentFloor].start;
+  yaw = start.yaw;
+  pitch = 0;
+  player.x = start.x;
+  player.z = start.z;
 
-let started = false;
-let dragging = false;
-let lastPointerX = 0;
-let lastPointerY = 0;
+  if (physicsReady && playerBody) {
+    playerBody.setNextKinematicTranslation({ x: start.x, y: 0.85, z: start.z });
+    physicsWorld.step();
+  }
+  setCameraFromPlayer();
+}
+
+function setFloor(floor) {
+  currentFloor = floor;
+  buildFloor(floor);
+  floorMode.textContent = `${floor}F`;
+  document.querySelectorAll('.floor').forEach(btn => {
+    btn.classList.toggle('active', Number(btn.dataset.floor) === floor);
+  });
+
+  if (RAPIER) rebuildPhysics(floor);
+  else physicsReady = false;
+  resetPlayer();
+}
 
 function onLook(dx, dy, scale = 1) {
   yaw -= dx * 0.0021 * scale;
   pitch -= dy * 0.0018 * scale;
   pitch = THREE.MathUtils.clamp(pitch, -1.35, 1.35);
+  setCameraFromPlayer();
 }
 
-renderer.domElement.addEventListener('pointerdown', e => {
-  if (!started) return;
-  dragging = true;
-  lastPointerX = e.clientX;
-  lastPointerY = e.clientY;
-  renderer.domElement.setPointerCapture?.(e.pointerId);
-  if (e.pointerType === 'mouse' && document.pointerLockElement !== renderer.domElement) {
-    renderer.domElement.requestPointerLock?.();
-  }
-});
+let dragging = false;
+let lastPointerX = 0;
+let lastPointerY = 0;
 
-renderer.domElement.addEventListener('pointermove', e => {
-  if (!started) return;
-  if (document.pointerLockElement === renderer.domElement) {
-    onLook(e.movementX, e.movementY);
-    return;
-  }
-  if (!dragging) return;
-  const dx = e.clientX - lastPointerX;
-  const dy = e.clientY - lastPointerY;
-  lastPointerX = e.clientX;
-  lastPointerY = e.clientY;
-  onLook(dx, dy, 1.5);
-});
+function installPointerControls() {
+  const canvas = renderer.domElement;
+  canvas.addEventListener('pointerdown', event => {
+    if (!started) return;
+    dragging = true;
+    lastPointerX = event.clientX;
+    lastPointerY = event.clientY;
+    canvas.setPointerCapture?.(event.pointerId);
+    if (event.pointerType === 'mouse' && document.pointerLockElement !== canvas) {
+      canvas.requestPointerLock?.();
+    }
+  });
 
-renderer.domElement.addEventListener('pointerup', () => { dragging = false; });
+  canvas.addEventListener('pointermove', event => {
+    if (!started) return;
+    if (document.pointerLockElement === canvas) {
+      onLook(event.movementX, event.movementY);
+      return;
+    }
+    if (!dragging) return;
+    const dx = event.clientX - lastPointerX;
+    const dy = event.clientY - lastPointerY;
+    lastPointerX = event.clientX;
+    lastPointerY = event.clientY;
+    onLook(dx, dy, 1.5);
+  });
 
-addEventListener('keydown', e => {
-  keys.add(e.code);
-  if (e.code === 'Digit1') setFloor(1);
-  if (e.code === 'Digit2') setFloor(2);
-  if (e.code === 'KeyR') resetPlayer();
+  canvas.addEventListener('pointerup', () => { dragging = false; });
+}
+
+addEventListener('keydown', event => {
+  keys.add(event.code);
+  if (event.code === 'Digit1') setFloor(1);
+  if (event.code === 'Digit2') setFloor(2);
+  if (event.code === 'KeyR') resetPlayer();
 });
-addEventListener('keyup', e => keys.delete(e.code));
+addEventListener('keyup', event => keys.delete(event.code));
 
 let joyForward = 0;
 let joyStrafe = 0;
@@ -340,36 +463,43 @@ const stick = document.querySelector('#stick');
 let joyId = null;
 
 function updateJoystick(touch) {
-  const r = joystick.getBoundingClientRect();
-  const cx = r.left + r.width / 2;
-  const cy = r.top + r.height / 2;
+  const rect = joystick.getBoundingClientRect();
+  const cx = rect.left + rect.width / 2;
+  const cy = rect.top + rect.height / 2;
   let dx = touch.clientX - cx;
   let dy = touch.clientY - cy;
-  const max = r.width * 0.32;
-  const mag = Math.hypot(dx, dy) || 1;
-  const k = Math.min(1, max / mag);
-  dx *= k; dy *= k;
+  const max = rect.width * 0.32;
+  const magnitude = Math.hypot(dx, dy) || 1;
+  const k = Math.min(1, max / magnitude);
+  dx *= k;
+  dy *= k;
   joyStrafe = dx / max;
   joyForward = -dy / max;
   stick.style.transform = `translate(${dx}px, ${dy}px)`;
 }
 
-joystick.addEventListener('touchstart', e => {
-  e.preventDefault();
-  const t = e.changedTouches[0];
-  joyId = t.identifier;
-  updateJoystick(t);
+joystick.addEventListener('touchstart', event => {
+  event.preventDefault();
+  const touch = event.changedTouches[0];
+  joyId = touch.identifier;
+  updateJoystick(touch);
 }, { passive: false });
-joystick.addEventListener('touchmove', e => {
-  e.preventDefault();
-  for (const t of e.changedTouches) if (t.identifier === joyId) updateJoystick(t);
+
+joystick.addEventListener('touchmove', event => {
+  event.preventDefault();
+  for (const touch of event.changedTouches) {
+    if (touch.identifier === joyId) updateJoystick(touch);
+  }
 }, { passive: false });
-joystick.addEventListener('touchend', e => {
-  for (const t of e.changedTouches) if (t.identifier === joyId) {
-    joyId = null;
-    joyForward = 0;
-    joyStrafe = 0;
-    stick.style.transform = 'translate(0, 0)';
+
+joystick.addEventListener('touchend', event => {
+  for (const touch of event.changedTouches) {
+    if (touch.identifier === joyId) {
+      joyId = null;
+      joyForward = 0;
+      joyStrafe = 0;
+      stick.style.transform = 'translate(0, 0)';
+    }
   }
 }, { passive: false });
 
@@ -377,77 +507,123 @@ const lookZone = document.querySelector('#lookZone');
 let lookId = null;
 let lookX = 0;
 let lookY = 0;
-lookZone.addEventListener('touchstart', e => {
-  e.preventDefault();
-  const t = e.changedTouches[0];
-  lookId = t.identifier;
-  lookX = t.clientX;
-  lookY = t.clientY;
-}, { passive: false });
-lookZone.addEventListener('touchmove', e => {
-  e.preventDefault();
-  for (const t of e.changedTouches) if (t.identifier === lookId) {
-    onLook(t.clientX - lookX, t.clientY - lookY, 2.4);
-    lookX = t.clientX;
-    lookY = t.clientY;
-  }
-}, { passive: false });
-lookZone.addEventListener('touchend', e => {
-  for (const t of e.changedTouches) if (t.identifier === lookId) lookId = null;
+
+lookZone.addEventListener('touchstart', event => {
+  event.preventDefault();
+  const touch = event.changedTouches[0];
+  lookId = touch.identifier;
+  lookX = touch.clientX;
+  lookY = touch.clientY;
 }, { passive: false });
 
-document.querySelector('#enter').addEventListener('click', () => {
-  started = true;
-  document.querySelector('#boot').style.display = 'none';
-});
-document.querySelector('#reset').addEventListener('click', resetPlayer);
-document.querySelectorAll('.floor').forEach(btn => btn.addEventListener('click', () => setFloor(Number(btn.dataset.floor))));
+lookZone.addEventListener('touchmove', event => {
+  event.preventDefault();
+  for (const touch of event.changedTouches) {
+    if (touch.identifier === lookId) {
+      onLook(touch.clientX - lookX, touch.clientY - lookY, 2.4);
+      lookX = touch.clientX;
+      lookY = touch.clientY;
+    }
+  }
+}, { passive: false });
+
+lookZone.addEventListener('touchend', event => {
+  for (const touch of event.changedTouches) {
+    if (touch.identifier === lookId) lookId = null;
+  }
+}, { passive: false });
 
 const clock = new THREE.Clock();
 
 function updatePlayer(dt) {
   if (!started) return;
+
   let forward = joyForward;
   let strafe = joyStrafe;
   if (keys.has('KeyW')) forward += 1;
   if (keys.has('KeyS')) forward -= 1;
   if (keys.has('KeyD')) strafe += 1;
   if (keys.has('KeyA')) strafe -= 1;
-  const mag = Math.hypot(forward, strafe);
-  if (mag > 1) { forward /= mag; strafe /= mag; }
+
+  const magnitude = Math.hypot(forward, strafe);
+  if (magnitude > 1) {
+    forward /= magnitude;
+    strafe /= magnitude;
+  }
 
   const speed = keys.has('ShiftLeft') || keys.has('ShiftRight') ? 4.2 : 2.35;
   const rightX = Math.cos(yaw);
   const rightZ = -Math.sin(yaw);
   const forwardX = -Math.sin(yaw);
   const forwardZ = -Math.cos(yaw);
-  const desired = {
-    x: (forwardX * forward + rightX * strafe) * speed * dt,
-    y: 0,
-    z: (forwardZ * forward + rightZ * strafe) * speed * dt
-  };
+  const dx = (forwardX * forward + rightX * strafe) * speed * dt;
+  const dz = (forwardZ * forward + rightZ * strafe) * speed * dt;
 
-  characterController.computeColliderMovement(playerCollider, desired);
-  const corrected = characterController.computedMovement();
-  const p = playerBody.translation();
-  playerBody.setNextKinematicTranslation({ x: p.x + corrected.x, y: p.y + corrected.y, z: p.z + corrected.z });
-  physicsWorld.step();
-  syncCamera();
+  if (physicsReady && characterController && playerCollider && playerBody) {
+    characterController.computeColliderMovement(playerCollider, { x: dx, y: 0, z: dz });
+    const corrected = characterController.computedMovement();
+    const p = playerBody.translation();
+    playerBody.setNextKinematicTranslation({ x: p.x + corrected.x, y: p.y + corrected.y, z: p.z + corrected.z });
+    physicsWorld.step();
+  } else {
+    const nextX = player.x + dx;
+    const nextZ = player.z + dz;
+    if (fallbackCanOccupy(nextX, player.z)) player.x = nextX;
+    if (fallbackCanOccupy(player.x, nextZ)) player.z = nextZ;
+  }
 
-  const cp = playerBody.translation();
-  roomLabel.textContent = roomAt(cp.x, cp.z);
+  setCameraFromPlayer();
+  const p = physicsReady && playerBody ? playerBody.translation() : player;
+  roomLabel.textContent = roomAt(p.x, p.z);
 }
 
-function animate() {
-  const dt = Math.min(clock.getDelta(), 0.033);
-  updatePlayer(dt);
-  renderer.render(scene, camera);
+function installRenderLoop() {
+  if (renderLoopInstalled) return;
+  renderLoopInstalled = true;
+  renderer.setAnimationLoop(() => {
+    const dt = Math.min(clock.getDelta(), 0.033);
+    updatePlayer(dt);
+    renderer.render(scene, camera);
+  });
 }
-renderer.setAnimationLoop(animate);
+
+enterButton.addEventListener('click', async () => {
+  if (started || starting) return;
+  starting = true;
+  enterButton.disabled = true;
+  const originalText = enterButton.textContent;
+  enterButton.textContent = '正在初始化 3D 引擎…';
+
+  try {
+    await createRenderer();
+    enterButton.textContent = '正在初始化碰撞系统…';
+    await initializePhysics();
+    resetPlayer();
+    started = true;
+    boot.style.display = 'none';
+  } catch (error) {
+    console.error('3D runtime initialization failed.', error);
+    rendererMode.textContent = '初始化失败';
+    enterButton.disabled = false;
+    enterButton.textContent = '重试进入';
+    const paragraph = boot.querySelector('p');
+    if (paragraph) paragraph.textContent = `3D 引擎初始化失败：${error?.message ?? '未知错误'}；可点击“重试进入”。`;
+  } finally {
+    starting = false;
+    if (!started && enterButton.textContent === originalText) enterButton.disabled = false;
+  }
+});
+
+resetButton.addEventListener('click', resetPlayer);
+document.querySelectorAll('.floor').forEach(button => {
+  button.addEventListener('click', () => setFloor(Number(button.dataset.floor)));
+});
 
 addEventListener('resize', () => {
   camera.aspect = innerWidth / innerHeight;
   camera.updateProjectionMatrix();
-  renderer.setPixelRatio(Math.min(devicePixelRatio, 2));
-  renderer.setSize(innerWidth, innerHeight);
+  if (renderer) {
+    renderer.setPixelRatio(Math.min(devicePixelRatio, 2));
+    renderer.setSize(innerWidth, innerHeight);
+  }
 });
